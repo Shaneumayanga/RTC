@@ -11,20 +11,21 @@
 <body>
 
     <div id="main">
-        <audio id="localAudio" autoplay muted></audio>
-        <audio id="remoteaudio" autoplay></audio>
+        <video id="localAudio" autoplay muted  style="width:40%;"></video>
+        <video id="remoteaudio" autoplay  style="width:40%;"></video>
     </div>
     <button id="join">JOIN</button>
 
     <script>
         var localStream;
         var peerconnection;
+        var uuid = createUUID();
         var localAudio = document.getElementById("localAudio")
         var remoteAudio = document.getElementById("remoteaudio")
         remoteAudio.onplaying = (e) => {
             console.log(e);
         }
-        var join = document.getElementById("join").addEventListener("click", startConnection)
+        var join = document.getElementById("join").addEventListener("click", (e) => startConnection(true))
         var ws = new WebSocket("ws://localhost:8080/ws")
         ws.onopen = (e) => alert("connection opended")
         ws.onclose = (e) => alert("connection closed");
@@ -37,6 +38,7 @@
         };
         var constraints = {
             audio: true,
+            video:true,
         };
         if (navigator.mediaDevices.getUserMedia) {
             navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
@@ -49,14 +51,16 @@
             alert('Your browser does not support getUserMedia API');
         }
 
-        function startConnection() {
+        function startConnection(isCaller) {
+            alert(isCaller);
             console.log("Loading.....")
             peerconnection = new RTCPeerConnection(peerConnectionConfig);
             peerconnection.onicecandidate = gotIceCandidate;
             peerconnection.ontrack = gotRemoteStream;
             peerconnection.addStream(localStream);
-            peerconnection.createOffer().then(createdOffer).catch((e) => console.log(e));
-            document.getElementById("join").style.display = "none"
+            if (isCaller) {
+                peerconnection.createOffer().then(createdOffer).catch((e) => console.log(e));
+            }
         }
 
         function gotIceCandidate(event) {
@@ -64,7 +68,8 @@
             if (event.candidate != null) {
                 var data = JSON.stringify({
                     "Data": event.candidate,
-                    "Type": "ICE"
+                    "Type": "ICE",
+                    "UUID": uuid,
                 })
                 ws.send(data);
             }
@@ -77,8 +82,11 @@
         }
 
         function onmessageWS(data) {
+            if (!peerconnection) startConnection(false);
+
             var data = JSON.parse(data.data);
             console.log(data);
+            if (data.UUID == uuid) return
             if (data.Type == "SDP") {
                 console.log(data.Data.sdp)
                 peerconnection.setRemoteDescription(new RTCSessionDescription(data.Data)).then(function () {
@@ -95,10 +103,18 @@
             peerconnection.setLocalDescription(description).then(function () {
                 var data = JSON.stringify({
                     "Data": peerconnection.localDescription,
-                    "Type": "SDP"
+                    "Type": "SDP",
+                    "UUID": uuid,
                 })
                 ws.send(data);
             }).catch((e) => console.log(e));
+        }
+
+        function createUUID() {
+            function s4() {
+                return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
+            }
+            return s4() + s4() + '-' + s4() + '-' + s4() + '-' + s4() + '-' + s4() + s4() + s4();
         }
     </script>
 

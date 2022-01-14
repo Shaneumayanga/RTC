@@ -12,6 +12,7 @@ import (
 type MSG struct {
 	Type string //sdp or ice
 	Data interface{}
+	UUID string
 }
 
 type Hub struct {
